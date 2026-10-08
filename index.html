@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全功能個人記帳本</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Excel Export) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --color-endeavor: #0359AE;
+            --color-tropics: #14B09B;
+            --color-sand: #EBE5D9;
+            --color-cabana: #CC8A56;
+        }
+        .bg-endeavor { background-color: var(--color-endeavor); }
+        .text-endeavor { color: var(--color-endeavor); }
+        .border-endeavor { border-color: var(--color-endeavor); }
+        .bg-tropics { background-color: var(--color-tropics); }
+        .text-tropics { color: var(--color-tropics); }
+        .border-tropics { border-color: var(--color-tropics); }
+        .bg-sand { background-color: var(--color-sand); }
+        .text-sand { color: var(--color-sand); }
+        .border-sand { border-color: var(--color-sand); }
+        .bg-cabana { background-color: var(--color-cabana); }
+        .text-cabana { color: var(--color-cabana); }
+        .border-cabana { border-color: var(--color-cabana); }
+    </style>
+</head>
+<body class="bg-[#EBE5D9] text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-[#0359AE] text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-wallet text-2xl text-[#14B09B]"></i>
+                <h1 class="text-xl font-bold tracking-wider">個人記帳本</h1>
+            </div>
+            <!-- 導覽分頁按鈕 -->
+            <nav class="flex flex-wrap gap-1 text-sm font-medium">
+                <button onclick="switchTab('dashboard')" id="btn-tab-dashboard" class="px-3 py-1.5 rounded-lg transition bg-[#14B09B] text-white shadow"><i class="fa-solid fa-chart-pie mr-1"></i> 總覽</button>
+                <button onclick="switchTab('transactions')" id="btn-tab-transactions" class="px-3 py-1.5 rounded-lg transition hover:bg-white/10"><i class="fa-solid fa-list-ul mr-1"></i> 明細</button>
+                <button onclick="switchTab('budgets')" id="btn-tab-budgets" class="px-3 py-1.5 rounded-lg transition hover:bg-white/10"><i class="fa-solid fa-bullseye mr-1"></i> 預算表</button>
+                <button onclick="switchTab('settings')" id="btn-tab-settings" class="px-3 py-1.5 rounded-lg transition hover:bg-white/10"><i class="fa-solid fa-gear mr-1"></i> 設定</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+
+        <!-- 1. 總覽分頁 -->
+        <section id="tab-dashboard" class="space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm flex flex-wrap items-center justify-between gap-4 border border-[#EBE5D9]">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-bold text-gray-600"><i class="fa-solid fa-calendar-days text-[#0359AE] mr-1"></i> 統計月份：</span>
+                    <input type="month" id="filter-month" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#0359AE]" onchange="updateDashboard()">
+                </div>
+                <div class="text-xs text-gray-500 bg-[#EBE5D9] px-3 py-1.5 rounded-lg">
+                    <span>起算日設定：每月 <span id="current-start-day-label">1</span> 號起</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-[#14B09B]">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">本期總收入</p>
+                    <p id="dash-total-income" class="text-2xl font-black text-[#14B09B] mt-1">$0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-[#CC8A56]">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">本期總支出</p>
+                    <p id="dash-total-expense" class="text-2xl font-black text-[#CC8A56] mt-1">$0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-[#0359AE]">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">本期結餘</p>
+                    <p id="dash-net" class="text-2xl font-black text-[#0359AE] mt-1">$0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm"><i class="fa-solid fa-chart-pie mr-1 text-[#0359AE]"></i> 支出分類佔比</h3>
+                    <div class="relative h-64 flex justify-center items-center">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm"><i class="fa-solid fa-credit-card mr-1 text-[#14B09B]"></i> 付款方式統計</h3>
+                    <div class="relative h-64 flex justify-center items-center">
+                        <canvas id="paymentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 明細分頁 -->
+        <section id="tab-transactions" class="hidden space-y-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                <h3 class="font-bold text-gray-700 mb-4 text-sm border-b pb-2"><i class="fa-solid fa-circle-plus text-[#0359AE] mr-1"></i> 新增收支紀錄</h3>
+                <form id="transaction-form" onsubmit="addTransaction(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">類型</label>
+                        <select id="tx-type" onchange="updateCategoryOptions()" class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#0359AE]">
+                            <option value="expense">支出</option>
+                            <option value="income">收入</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">日期</label>
+                        <input type="date" id="tx-date" required class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0359AE]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">金額 ($)</label>
+                        <input type="number" id="tx-amount" min="1" required placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0359AE]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">分類</label>
+                        <select id="tx-category" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#0359AE]">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">付款方式</label>
+                        <select id="tx-payment" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#0359AE]">
+                            <!-- 動態載入付款方式 -->
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="flex-grow">
+                            <label class="block text-xs font-bold text-gray-600 mb-1">備註</label>
+                            <input type="text" id="tx-note" placeholder="例如：午餐" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0359AE]">
+                        </div>
+                        <button type="submit" class="bg-[#0359AE] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#024385] transition h-[38px] self-end">記帳</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <h3 class="font-bold text-gray-700 text-sm"><i class="fa-solid fa-list mr-1 text-[#0359AE]"></i> 歷史收支明細</h3>
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <input type="text" id="search-keyword" placeholder="搜尋備註/分類..." oninput="renderTransactions()" class="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#0359AE]">
+                        <select id="filter-payment-type" onchange="renderTransactions()" class="border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none">
+                            <option value="">所有付款方式</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-[#EBE5D9] text-gray-700 uppercase text-xs">
+                            <tr>
+                                <th class="p-3">日期</th>
+                                <th class="p-3">類型</th>
+                                <th class="p-3">分類</th>
+                                <th class="p-3">付款方式</th>
+                                <th class="p-3">金額</th>
+                                <th class="p-3">備註</th>
+                                <th class="p-3 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transaction-table-body" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 預算表分頁 -->
+        <section id="tab-budgets" class="hidden space-y-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h3 class="font-bold text-gray-700 text-sm"><i class="fa-solid fa-bullseye text-[#CC8A56] mr-1"></i> 年度總預算設定</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">設定您的年度總預算，並管理每月與各分類的詳細預算。</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-bold text-gray-600">年度總預算 ($)：</span>
+                    <input type="number" id="annual-budget-input" onchange="saveAnnualBudget()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 focus:outline-none focus:border-[#0359AE]" placeholder="例如：360000">
+                </div>
+            </div>
+
+            <!-- 每月預算與分類比對列表 -->
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <h3 class="font-bold text-gray-700 text-sm"><i class="fa-solid fa-chart-column mr-1 text-[#14B09B]"></i> 每月預算清單與常用分類比對</h3>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-bold text-gray-600">選擇年份：</span>
+                        <select id="budget-year-select" onchange="renderBudgets()" class="border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none">
+                            <option value="2025">2025 年</option>
+                            <option value="2026" selected>2026 年</option>
+                            <option value="2027">2027 年</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-[#EBE5D9] text-gray-700 uppercase text-xs">
+                            <tr>
+                                <th class="p-3">月份</th>
+                                <th class="p-3">當月總預算上限</th>
+                                <th class="p-3">實際總支出</th>
+                                <th class="p-3">剩餘 / 超支</th>
+                                <th class="p-3">執行進度</th>
+                                <th class="p-3 text-center">常用分類預算明細</th>
+                            </tr>
+                        </thead>
+                        <tbody id="budget-table-body" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. 設定分頁 -->
+        <section id="tab-settings" class="hidden space-y-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2"><i class="fa-solid fa-calendar-check text-[#0359AE] mr-1"></i> 每月記帳週期設定</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">每月預算起算日</label>
+                        <p class="text-xs text-gray-400 mb-2">例如設定為 25 號，則 3 月的計算區間為 3/25 ~ 4/24。</p>
+                        <select id="setting-start-day" class="border rounded-lg px-3 py-2 text-sm bg-white w-full focus:outline-none focus:border-[#0359AE]">
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="saveSettings()" class="bg-[#0359AE] text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-[#024385] transition">儲存起算日設定</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 付款方式自訂設定 -->
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2"><i class="fa-solid fa-credit-card text-[#CC8A56] mr-1"></i> 付款方式管理</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">新增付款方式</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-payment-name" placeholder="例如：Line Pay" class="border rounded-lg px-3 py-2 text-sm flex-grow focus:outline-none focus:border-[#0359AE]">
+                            <button onclick="addPaymentMethod()" class="bg-[#CC8A56] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#b07445] transition">新增</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">現有付款方式列表</label>
+                        <div id="payment-list-container" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 border rounded-lg bg-gray-50">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分類管理 -->
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2"><i class="fa-solid fa-tags text-[#14B09B] mr-1"></i> 收支分類管理</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">新增自訂分類</label>
+                        <div class="flex gap-2">
+                            <select id="new-cat-type" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                                <option value="expense">支出</option>
+                                <option value="income">收入</option>
+                            </select>
+                            <input type="text" id="new-cat-name" placeholder="分類名稱..." class="border rounded-lg px-3 py-2 text-sm flex-grow focus:outline-none focus:border-[#0359AE]">
+                            <button onclick="addCategory()" class="bg-[#14B09B] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#118f7e] transition">新增</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">現有分類列表</label>
+                        <div id="category-list-container" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 border rounded-lg bg-gray-50">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-sm space-y-4">
+                <h3 class="font-bold text-gray-700 text-sm border-b pb-2"><i class="fa-solid fa-file-excel text-[#CC8A56] mr-1"></i> 資料備份與 Excel 匯出</h3>
+                <p class="text-xs text-gray-500">您可以將記帳明細匯出為 Excel 檔案進行永久保留，或是進行資料的備份與還原。</p>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="exportToExcel()" class="bg-[#CC8A56] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#b07445] transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel"></i> 匯出 Excel 報表
+                    </button>
+                    <label class="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition cursor-pointer flex items-center gap-2">
+                        <i class="fa-solid fa-upload"></i> 從 JSON 還原備份
+                        <input type="file" id="import-file" accept=".json" onchange="importData(event)" class="hidden">
+                    </label>
+                    <button onclick="exportJSON()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-300 transition flex items-center gap-2">
+                        <i class="fa-solid fa-download"></i> 備份 JSON 檔案
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 分類細項預算彈跳視窗 Modal -->
+    <div id="category-budget-modal" class="fixed inset-0 bg-black/50 hidden z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 id="modal-title" class="font-bold text-gray-800 text-base">設定各分類預算</h3>
+                <button onclick="closeCategoryBudgetModal()" class="text-gray-400 hover:text-gray-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="modal-category-inputs" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t">
+                <button onclick="closeCategoryBudgetModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-300 transition">取消</button>
+                <button onclick="saveCategoryBudgets()" class="bg-[#0359AE] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#024385] transition">儲存分類預算</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯歷史記帳資料彈跳視窗 Modal -->
+    <div id="edit-transaction-modal" class="fixed inset-0 bg-black/50 hidden z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-gray-800 text-base">修改收支紀錄</h3>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="edit-tx-form" onsubmit="saveEditedTransaction(event)" class="space-y-3">
+                <input type="hidden" id="edit-tx-id">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">類型</label>
+                    <select id="edit-tx-type" onchange="updateEditCategoryOptions()" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+                        <option value="expense">支出</option>
+                        <option value="income">收入</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">日期</label>
+                    <input type="date" id="edit-tx-date" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">金額 ($)</label>
+                    <input type="number" id="edit-tx-amount" min="1" required class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">分類</label>
+                    <select id="edit-tx-category" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">付款方式</label>
+                    <select id="edit-tx-payment" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">備註</label>
+                    <input type="text" id="edit-tx-note" class="w-full border rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" onclick="closeEditModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold">取消</button>
+                    <button type="submit" class="bg-[#0359AE] text-white px-4 py-2 rounded-lg text-sm font-bold">儲存變更</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 頁尾 -->
+    <footer class="bg-white border-t border-gray-200 py-4 mt-auto text-center text-xs text-gray-500">
+        <p>個人記帳本 &copy; 2026 - 手機與網頁完整支援版</p>
+    </footer>
+
+    <!-- JavaScript 邏輯區 -->
+    <script>
+        let appData = JSON.parse(localStorage.getItem('my_ledger_data')) || {
+            settings: { startDay: 1, annualBudget: 360000, monthlyBudgets: {}, categoryBudgets: {} },
+            categories: {
+                expense: ['伙食費', '交通費', '購物', '娛樂', '居住', '醫療', '其他'],
+                income: ['薪資', '獎金', '投資', '兼職', '其他']
+            },
+            paymentMethods: ['現金', '信用卡', '悠遊卡', '轉帳'],
+            transactions: []
+        };
+
+        // 確保舊資料若無 paymentMethods 時能自動補上預設值
+        if(!appData.paymentMethods) {
+            appData.paymentMethods = ['現金', '信用卡', '悠遊卡', '轉帳'];
+        }
+
+        let expenseChartInstance = null;
+        let paymentChartInstance = null;
+        let currentEditingMonth = '';
+
+        window.onload = function() {
+            const startDaySelect = document.getElementById('setting-start-day');
+            for(let i=1; i<=31; i++) {
+                let opt = document.createElement('option');
+                opt.value = i;
+                opt.text = `每月 ${i} 號`;
+                startDaySelect.appendChild(opt);
+            }
+            startDaySelect.value = appData.settings.startDay || 1;
+            document.getElementById('current-start-day-label').innerText = appData.settings.startDay || 1;
+
+            const now = new Date();
+            const yearMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}`;
+            document.getElementById('filter-month').value = yearMonthStr;
+            document.getElementById('tx-date').valueAsDate = now;
+            document.getElementById('annual-budget-input').value = appData.settings.annualBudget || 360000;
+
+            updateCategoryOptions();
+            updatePaymentOptions();
+            renderCategoryList();
+            renderPaymentList();
+            updateDashboard();
+        };
+
+        function switchTab(tabName) {
+            ['dashboard', 'transactions', 'budgets', 'settings'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                document.getElementById(`btn-tab-${t}`).className = "px-3 py-1.5 rounded-lg transition hover:bg-white/10";
+            });
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            document.getElementById(`btn-tab-${tabName}`).className = "px-3 py-1.5 rounded-lg transition bg-[#14B09B] text-white shadow";
+
+            if(tabName === 'dashboard') updateDashboard();
+            if(tabName === 'transactions') renderTransactions();
+            if(tabName === 'budgets') renderBudgets();
+        }
+
+        function saveData() {
+            localStorage.setItem('my_ledger_data', JSON.stringify(appData));
+        }
+
+        function updateCategoryOptions() {
+            const type = document.getElementById('tx-type').value;
+            const catSelect = document.getElementById('tx-category');
+            catSelect.innerHTML = '';
+            appData.categories[type].forEach(cat => {
+                let opt = document.createElement('option');
+                opt.value = cat;
+                opt.text = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        function updatePaymentOptions() {
+            const paySelect = document.getElementById('tx-payment');
+            paySelect.innerHTML = '';
+            appData.paymentMethods.forEach(pay => {
+                let opt = document.createElement('option');
+                opt.value = pay;
+                opt.text = pay;
+                paySelect.appendChild(opt);
+            });
+
+            // 同時更新篩選付款方式下拉選單
+            const filterPay = document.getElementById('filter-payment-type');
+            filterPay.innerHTML = '<option value="">所有付款方式</option>';
+            appData.paymentMethods.forEach(pay => {
+                let opt = document.createElement('option');
+                opt.value = pay;
+                opt.text = pay;
+                filterPay.appendChild(opt);
+            });
+        }
+
+        function addTransaction(e) {
+            e.preventDefault();
+            const tx = {
+                id: Date.now().toString(),
+                type: document.getElementById('tx-type').value,
+                date: document.getElementById('tx-date').value,
+                amount: parseFloat(document.getElementById('tx-amount').value),
+                category: document.getElementById('tx-category').value,
+                payment: document.getElementById('tx-payment').value,
+                note: document.getElementById('tx-note').value.trim()
+            };
+            appData.transactions.push(tx);
+            saveData();
+            document.getElementById('transaction-form').reset();
+            document.getElementById('tx-date').valueAsDate = new Date();
+            updateCategoryOptions();
+            alert('記帳成功！');
+            renderTransactions();
+        }
+
+        function deleteTransaction(id) {
+            if(confirm('確定要刪除這筆紀錄嗎？')) {
+                appData.transactions = appData.transactions.filter(t => t.id !== id);
+                saveData();
+                renderTransactions();
+                updateDashboard();
+            }
+        }
+
+        // 編輯歷史紀錄相關函數
+        function openEditModal(id) {
+            const tx = appData.transactions.find(t => t.id === id);
+            if(!tx) return;
+
+            document.getElementById('edit-tx-id').value = tx.id;
+            document.getElementById('edit-tx-type').value = tx.type;
+            document.getElementById('edit-tx-date').value = tx.date;
+            document.getElementById('edit-tx-amount').value = tx.amount;
+            document.getElementById('edit-tx-note').value = tx.note || '';
+
+            updateEditCategoryOptions();
+            document.getElementById('edit-tx-category').value = tx.category;
